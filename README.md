@@ -2,7 +2,7 @@
 
 Spun is a lightweight [Sendspin](https://sendspin-audio.com/) client that wires [Music Assistant](https://www.music-assistant.io/) to your Linux desktop's [native multimedia controls](https://specifications.freedesktop.org/mpris/latest/) and keyboard's media keys. It lives in your system tray, and is designed to require minimal setup and never to bother you unless something is wrong. Add it to your login items if you wish. When you (or your automations) want to play music or announce something, it dutifully does just that and then gets out of your way again.
 
-https://github.com/vhtkrk/spun/blob/main/assets/preview.mp4
+https://github.com/user-attachments/assets/12f16ec7-7800-488e-b4ec-ab3d82d2a78a
 
 What ended up becoming Spun started as an Home Assistant automation that fired up a terminal running the [sendspin python cli](https://github.com/Sendspin/sendspin-python-cli) when I wanted to play something. As it evolved into a real application, the design philosophy stayed. The best automations are those that you barely even remember are there (until they stop working of course; and often the problem is elsewhere): Spun aims for the same.
 
