@@ -39,10 +39,13 @@ What ended up becoming Spun started as an Home Assistant automation that fired u
   - GNOME requires AppIndicator extension, pretty much everything else works out of the box
 - Flatpak
 
-## Run
+## Get Spun
 
-Download from releases. Flathub does not allow tray apps.
-Publishing in some other repo is WIP.
+Install with Flatpak:
+```sh
+flatpak install --user https://ö.foo/spun.flatpakref
+```
+Or download from releases.
 
 ## Build
 
