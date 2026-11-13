@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Spun
+Comment=Sendspin player for Music Assistant
+Exec=spun
+Icon=foo.xn__nda.spun
+# spun opens no window. Without this line, the launcher shows a busy cursor
+# until it times out.
+StartupNotify=false
+Categories=AudioVideo;Audio;Player;
+Keywords=Sendspin;Music Assistant;
+X-GNOME-UsesNotifications=true

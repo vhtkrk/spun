@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>foo.xn__nda.spun</id>
+  <name>Spun</name>
+  <summary>Sendspin player for Music Assistant</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="foo.xn__nda">
+    <name>vhtkrk</name>
+  </developer>
+  <url type="homepage">https://xn--nda.foo/spun</url>
+  <launchable type="desktop-id">foo.xn__nda.spun.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <description>
+    <p>
+      Spun is a lightweight Sendspin client that wires Music Assistant to your 
+      Linux desktop&apos;s native multimedia controls and keyboard&apos;s media keys. 
+      It lives in your system tray, and is designed to require minimal setup and never 
+      to bother you unless something is wrong. Add it to your login items if you wish. 
+      When you (or your automations) want to play music or announce something, it dutifully 
+      does just that and then gets out of your way again.
+    </p>
+  </description>
+  <releases>
+    <release version="0.1.0" date="2026-11-12"/>
+  </releases>
+</component>

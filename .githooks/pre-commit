@@ -1,0 +1,12 @@
+#!/bin/sh
+# Runs the lint steps of CI before each commit. A failed step stops the
+# commit. Enable the hook once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# ponytail: the steps check the working tree, not the staged snapshot, so
+# unstaged changes can pass or fail a partial commit. Run the steps on a
+# `git stash --keep-index` if partial commits become common.
+set -e
+cargo fmt --check
+cargo clippy --locked --all-targets -- -D warnings

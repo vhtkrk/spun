@@ -1,0 +1,6 @@
+/target
+.ori
+# flatpak-builder output, and the generated crate list for its offline build
+/.flatpak-builder
+/build-dir
+/packaging/cargo-sources.json

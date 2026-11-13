@@ -1,0 +1,44 @@
+[package]
+name = "spun"
+version = "0.1.0"
+edition = "2024"
+description = "Lightweight Sendspin client for the Linux/Wayland system tray"
+license = "MIT"
+
+[dependencies]
+# The rev is the 0.4.0 release code with one fix: the player opens no cpal host 
+# when the caller passes a device. Each host holds a connection to the sound server,
+# and cpal leaks it. The fix waits in branch fix/synced-player-build-leak for its 
+# upstream PR to be accepted. When upstream has it, use `version = "0.4"` from crates.io.
+sendspin = { git = "https://github.com/vhtkrk/sendspin-rs", rev = "4af160dbf3808181854d9ea79a9af33614933169", features = ["native-tls"] }
+cpal = { version = "0.18", features = ["pulseaudio"] }
+parking_lot = "0.12"
+ksni = "0.3"
+zbus = "5"
+futures-util = "0.3"
+# MPRIS: the desktop media controls. 0.10 shares zbus 5 with ksni;
+# 0.11 moved to zbus 6.
+mpris-server = { version = "0.10", features = ["tokio"] }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
+uuid = { version = "1", features = ["v4"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+http = "1"
+log = "0.4"
+env_logger = "0.11"
+mdns-sd = "0.14"
+tempfile = "3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+inotify = "0.11.5"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
+tokio-tungstenite = "0.29"
+serde_json = "1"
+zbus = { version = "5", features = ["p2p"] }
+
+[build-dependencies]
+png = "0.18.1"

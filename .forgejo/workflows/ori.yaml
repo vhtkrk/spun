@@ -1,0 +1,74 @@
+name: ori
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  ori:
+    # This looks complicated, but basically is filtering events down to
+    # only those that contain "/ori" in the body.
+    # You can write filters however you want to, without a restriction
+    # on specific wording being included. It is however recommended to
+    # keep the "mentions" input value up to date with any references to
+    # the agent, but this only affects the prompt details sent as input
+    # to the ori process directly.
+    if: |
+      (forgejo.event_name == 'issues' && (
+        contains(forgejo.event.issue.body, '/ori') ||
+        startsWith(forgejo.event.issue.body, '/ori')
+      )) ||
+      contains(forgejo.event.comment.body, '/ori') ||
+      startsWith(forgejo.event.comment.body, '/ori') ||
+      contains(forgejo.event.review.content, '/ori') ||
+      startsWith(forgejo.event.review.content, '/ori')
+
+    # This action runner only requires bash 4.4+, git, curl, bash and the
+    # ability to run latest ori and jq (both of which it retrieves)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run ori
+        uses: https://git.xn--nda.gg/jj/forgejo-oricode.git@main
+        with:
+          # This is passed as --model to ori when called
+          model: z-ai/glm-5.3-flash
+
+          # Used solely for creating PRs, all other operations use the
+          # provided emphemeral action token. Resolved here in the workflow,
+          # where `forgejo.token` is reliably in scope; a composite action
+          # cannot depend on it resolving inside its own `with:`. This
+          # fallback is also what makes checkout work on other repositories:
+          # env.FORGEJO_TOKEN is empty in a composite action's env context,
+          # and a blank token reaches actions/checkout as a rejected auth
+          # header that surfaces as the misleading "could not read Username".
+          pr-creation-pat: ${{ secrets.PR_CREATION_PAT || forgejo.token }}
+
+          # This is passed as --reasoning-effort to ori when called
+          variant: high
+
+          # This is used to inform ori of how it may have been
+          # mentioned within the requesting event. Setting to blank
+          # removes any prompt references to it.
+          mentions: "/ori"
+
+          # Authenticates ori against OpenRouter for the chosen model.
+          # Passed as an input rather than via `env`, which a composite
+          # action's steps do not reliably inherit.
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+
+          # The job limit the agent's time budget is planned against. The
+          # action cannot read the job's limit itself; keep this in sync if
+          # the job sets timeout-minutes.
+          timeout-minutes: 120
+
+          # The inference budget allotted for a task in dollars.
+          # After this the model is steered to stop working and finish its
+          # task ASAP. Can be overridden on the /ori command with budget:x.xx
+          budget: 1.00

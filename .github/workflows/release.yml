@@ -1,0 +1,155 @@
+# Builds the Flatpak for each tag that starts with `v`, then publishes it:
+#
+# - a Flatpak repository and `spun.flatpakref` in a Backblaze B2 bucket
+# - a GitHub release with one `.flatpak` bundle for each architecture
+#
+# Set these in the repository settings before the first tag:
+#
+#   Secret   FLATPAK_GPG_PRIVATE_KEY  ASCII-armored private key, no passphrase
+#   Secret   B2_APPLICATION_KEY_ID    B2 application key with write access
+#   Secret   B2_APPLICATION_KEY
+#   Variable B2_BUCKET                Name of a public bucket
+#   Variable FLATPAK_URL              Public URL of the bucket root, no slash
+#                                     at the end
+#
+# The job owns `repo/` and `spun.flatpakref` in the bucket. It deletes each
+# file under `repo/` that the new build does not have.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  APP_ID: foo.xn__nda.spun
+  BRANCH: stable
+  FLATHUB: https://dl.flathub.org/repo/flathub.flatpakrepo
+
+jobs:
+  # This job runs code from the crates and has no secrets.
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check that the tag matches the version in Cargo.toml
+        run: grep -qxF "version = \"${GITHUB_REF_NAME#v}\"" Cargo.toml
+      - name: Install the Flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder appstream-compose
+          # Ubuntu 24.04 restricts unprivileged user namespaces, and the
+          # build sandbox needs them.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub "$FLATHUB"
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Generate the crate list for the offline build
+        # The commit pins the script, because its output decides what the
+        # build compiles.
+        run: >
+          uv run -s
+          https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/41c20aa10819cdb2a4f3ca171758a96d1955c018/cargo/flatpak-cargo-generator.py
+          Cargo.lock -o packaging/cargo-sources.json
+      - name: Build
+        run: >
+          flatpak-builder --user --install-deps-from=flathub
+          --disable-rofiles-fuse --default-branch="$BRANCH"
+          --repo=repo build-dir "packaging/$APP_ID.yml"
+      - run: tar -cf "repo-${{ matrix.arch }}.tar" repo
+      - uses: actions/upload-artifact@v7
+        with:
+          name: repo-${{ matrix.arch }}
+          path: repo-${{ matrix.arch }}.tar
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      FLATPAK_URL: ${{ vars.FLATPAK_URL }}
+      B2_BUCKET: ${{ vars.B2_BUCKET }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: repo-*
+          merge-multiple: true
+      - name: Install the tools
+        run: |
+          : "${FLATPAK_URL:?}" "${B2_BUCKET:?}"
+          sudo apt-get update
+          sudo apt-get install -y flatpak ostree
+          pipx install b2
+      - name: Import the signing key
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          echo "$FLATPAK_GPG_PRIVATE_KEY" | gpg --batch --import
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '$1 == "fpr" { print $10; exit }')
+          echo "GPG_KEY=$key" >> "$GITHUB_ENV"
+          gpg --export "$key" > spun.gpg
+      - name: Merge the builds into one signed repository
+        # ponytail: each release starts from an empty repository, so there
+        # are no static deltas and a client downloads the full app on each
+        # update. Keep the repository between releases if the app grows.
+        # Check first that B2 serves a `+` in a file name, because delta
+        # names have them.
+        run: |
+          ostree init --repo=repo --mode=archive
+          for arch in x86_64 aarch64; do
+            mkdir "src-$arch"
+            tar -xf "repo-$arch.tar" -C "src-$arch"
+            # The new commits carry the signature. The commits from the
+            # build job have none.
+            flatpak build-commit-from --src-repo="src-$arch/repo" \
+              --gpg-sign="$GPG_KEY" --no-update-summary repo \
+              $(ostree refs --repo="src-$arch/repo" | grep -E '^(app|runtime)/')
+          done
+          flatpak build-update-repo --gpg-sign="$GPG_KEY" repo
+      - name: Write the flatpakref and the bundles
+        run: |
+          cat > spun.flatpakref <<EOF
+          [Flatpak Ref]
+          Name=$APP_ID
+          Branch=$BRANCH
+          Title=Spun
+          Url=$FLATPAK_URL/repo
+          RuntimeRepo=$FLATHUB
+          IsRuntime=false
+          GPGKey=$(base64 -w0 spun.gpg)
+          EOF
+          # The URL and the key let an app from a bundle get updates from
+          # the repository.
+          for arch in x86_64 aarch64; do
+            flatpak build-bundle --arch="$arch" --runtime-repo="$FLATHUB" \
+              --repo-url="$FLATPAK_URL/repo" --gpg-keys=spun.gpg \
+              repo "spun-$arch.flatpak" "$APP_ID" "$BRANCH"
+          done
+      - name: Upload to B2
+        env:
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+        # ponytail: the sync is not atomic. A client that updates during the
+        # upload can get an error and must try again. Upload the objects
+        # first and the summary last if that becomes a problem.
+        run: |
+          b2 account authorize
+          b2 sync --delete repo "b2://$B2_BUCKET/repo"
+          b2 file upload "$B2_BUCKET" spun.flatpakref spun.flatpakref
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          spun-x86_64.flatpak spun-aarch64.flatpak spun.flatpakref
